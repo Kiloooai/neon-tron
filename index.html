@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Tron</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: #f0f;
+            text-shadow: 0 0 15px #f0f;
+            letter-spacing: 4px;
+        }
+
+        .score-board {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .score { color: #0ff; }
+        .high-score { color: #ff0; text-shadow: 0 0 10px #ff0; }
+
+        canvas {
+            border: 2px solid #0ff;
+            border-radius: 5px;
+            box-shadow: 0 0 30px rgba(0,255,255,0.3);
+            background: #000;
+            cursor: crosshair;
+        }
+
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        button {
+            background: transparent;
+            border: 2px solid #f0f;
+            color: #f0f;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            background: rgba(255,0,255,0.1);
+            box-shadow: 0 0 15px rgba(255,0,255,0.4);
+        }
+
+        .instructions {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            padding: 40px 60px;
+            border-radius: 15px;
+            border: 2px solid #f0f;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(255,0,255,0.5);
+            display: none;
+            z-index: 10;
+        }
+
+        .game-over h2 {
+            font-size: 42px;
+            color: #ff0000;
+            text-shadow: 0 0 20px #ff0000;
+            margin-bottom: 15px;
+        }
+
+        .game-over p {
+            font-size: 18px;
+            margin-bottom: 20px;
+        }
+
+        .mobile-controls {
+            display: none;
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            gap: 10px;
+        }
+
+        .mobile-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid #0ff;
+            background: transparent;
+            color: #0ff;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+
+        .mobile-btn:active {
+            background: rgba(0,255,255,0.2);
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        .d-pad {
+            display: grid;
+            grid-template-columns: 60px 60px 60px;
+            grid-template-rows: 60px 60px;
+            gap: 5px;
+        }
+
+        .d-up { grid-column: 2; grid-row: 1; }
+        .d-left { grid-column: 1; grid-row: 2; }
+        .d-down { grid-column: 2; grid-row: 2; }
+        .d-right { grid-column: 3; grid-row: 2; }
+    </style>
+</head>
+<body>
+    <h1>NEON TRON</h1>
+
+    <div class="score-board">
+        <div class="score">Score: <span id="score">0</span></div>
+        <div class="high-score">High: <span id="highScore">0</span></div>
+    </div>
+
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <div class="controls">
+        <button id="startBtn">Start</button>
+        <button id="pauseBtn">Pause</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+
+    <div class="mobile-controls" id="mobileControls">
+        <div class="d-pad">
+            <button class="mobile-btn d-up" data-dir="up">↑</button>
+            <button class="mobile-btn d-left" data-dir="left">←</button>
+            <button class="mobile-btn d-down" data-dir="down">↓</button>
+            <button class="mobile-btn d-right" data-dir="right">→</button>
+        </div>
+    </div>
+
+    <div class="instructions">
+        Arrow keys or WASD to steer • Collect glowing orbs to grow and score • Avoid walls and your own light trail • Speed increases over time
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <h2>CRASHED!</h2>
+        <p>Your score: <span id="finalScore">0</span></p>
+        <button id="restartBtn">PLAY AGAIN</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const gameOverEl = document.getElementById('gameOver');
+        const finalScoreEl = document.getElementById('finalScore');
+        const restartBtn = document.getElementById('restartBtn');
+
+        const GRID_SIZE = 10;
+        const COLS = canvas.width / GRID_SIZE;
+        const ROWS = canvas.height / GRID_SIZE;
+
+        let bike = { x: 0, y: 0, dir: 'right', nextDir: 'right', speed: 5 };
+        let trail = []; // array of {x, y}
+        let orbs = [];
+        let gameRunning = false;
+        let gamePaused = false;
+        let score = 0;
+        let highScore = localStorage.getItem('neonTronHighScore') || 0;
+        let gameLoop;
+        let lastTime = 0;
+        let moveAccumulator = 0;
+        let baseMoveInterval = 1000 / 10; // 10 FPS base
+
+        highScoreEl.textContent = highScore;
+
+        function init() {
+            bike = {
+                x: Math.floor(COLS / 4) * GRID_SIZE,
+                y: Math.floor(ROWS / 2) * GRID_SIZE,
+                dir: 'right',
+                nextDir: 'right',
+                speed: 5
+            };
+            trail = [];
+            orbs = [];
+            score = 0;
+            scoreEl.textContent = 0;
+            spawnOrb();
+            gameOverEl.style.display = 'none';
+        }
+
+        function spawnOrb() {
+            let valid = false;
+            let ox, oy;
+            while (!valid) {
+                ox = Math.floor(Math.random() * COLS) * GRID_SIZE;
+                oy = Math.floor(Math.random() * ROWS) * GRID_SIZE;
+                // Don't spawn on trail or bike
+                valid = !trail.some(t => t.x === ox && t.y === oy) &&
+                        (ox !== bike.x || oy !== bike.y);
+            }
+            orbs.push({ x: ox, y: oy, pulse: 0 });
+        }
+
+        function update() {
+            // Apply queued direction
+            bike.dir = bike.nextDir;
+
+            // Calculate new head position
+            let newX = bike.x;
+            let newY = bike.y;
+            switch (bike.dir) {
+                case 'up': newY -= GRID_SIZE; break;
+                case 'down': newY += GRID_SIZE; break;
+                case 'left': newX -= GRID_SIZE; break;
+                case 'right': newX += GRID_SIZE; break;
+            }
+
+            // Wall collision (wrap? no, die)
+            if (newX < 0 || newX >= canvas.width || newY < 0 || newY >= canvas.height) {
+                gameOver();
+                return;
+            }
+
+            // Self collision (check trail)
+            for (let t of trail) {
+                if (t.x === newX && t.y === newY) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // Move bike: add current position to trail
+            trail.push({ x: bike.x, y: bike.y });
+
+            // Update bike position
+            bike.x = newX;
+            bike.y = newY;
+
+            // Check orb collection
+            for (let i = orbs.length - 1; i >= 0; i--) {
+                if (orbs[i].x === bike.x && orbs[i].y === bike.y) {
+                    score += 10;
+                    scoreEl.textContent = score;
+                    orbs.splice(i, 1);
+                    spawnOrb();
+                    // Increase speed slightly every 5 orbs
+                    if (score % 50 === 0) {
+                        bike.speed += 0.5;
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            // Clear with slight fade for trail effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw trail (glowing lines)
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = GRID_SIZE - 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00ffff';
+            ctx.beginPath();
+            if (trail.length > 0) {
+                ctx.moveTo(trail[0].x + GRID_SIZE/2, trail[0].y + GRID_SIZE/2);
+                for (let i = 1; i < trail.length; i++) {
+                    ctx.lineTo(trail[i].x + GRID_SIZE/2, trail[i].y + GRID_SIZE/2);
+                }
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Draw bike (head)
+            ctx.fillStyle = '#ff00ff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff00ff';
+            ctx.fillRect(bike.x + 1, bike.y + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+            ctx.shadowBlur = 0;
+
+            // Draw orbs (pulsing)
+            orbs.forEach(orb => {
+                orb.pulse += 0.2;
+                const size = (GRID_SIZE/2) * (0.8 + Math.sin(orb.pulse) * 0.2);
+                ctx.beginPath();
+                ctx.arc(orb.x + GRID_SIZE/2, orb.y + GRID_SIZE/2, size, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffff00';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#ffff00';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function gameLoopCallback(currentTime) {
+            requestAnimationFrame(gameLoopCallback);
+
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Adjust move interval based on speed
+            const moveInterval = baseMoveInterval * (10 / bike.speed);
+
+            moveAccumulator += deltaTime;
+            if (moveAccumulator >= moveInterval) {
+                moveAccumulator -= moveInterval;
+                if (gameRunning && !gamePaused) {
+                    update();
+                    draw();
+                }
+            }
+
+            // Continue animation for smooth visuals
+            if (gameRunning && !gamePaused) {
+                // Draw continuously for smooth bike glow even when not moving?
+                // Actually we only redraw on update to keep trail accumulation
+                // But we could animate orbs continuously
+                // Let's just draw orbs separately if needed
+                // For now, just rely on update() drawing
+            }
+        }
+
+        function start() {
+            if (gameRunning) return;
+            init();
+            gameRunning = true;
+            gamePaused = false;
+            lastTime = performance.now();
+            moveAccumulator = 0;
+            requestAnimationFrame(gameLoopCallback);
+        }
+
+        function pause() {
+            gamePaused = !gamePaused;
+            pauseBtn.textContent = gamePaused ? 'Resume' : 'Pause';
+        }
+
+        function reset() {
+            init();
+            draw();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('neonTronHighScore', highScore);
+                highScoreEl.textContent = highScore;
+            }
+            finalScoreEl.textContent = score;
+            gameOverEl.style.display = 'block';
+        }
+
+        // Input handling
+        const dirMap = {
+            'ArrowUp': 'up', 'KeyW': 'up',
+            'ArrowDown': 'down', 'KeyS': 'down',
+            'ArrowLeft': 'left', 'KeyA': 'left',
+            'ArrowRight': 'right', 'KeyD': 'right'
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if (dirMap[e.code]) {
+                e.preventDefault();
+                const newDir = dirMap[e.code];
+                // Prevent 180-degree turns
+                if ((newDir === 'up' && bike.dir !== 'down') ||
+                    (newDir === 'down' && bike.dir !== 'up') ||
+                    (newDir === 'left' && bike.dir !== 'right') ||
+                    (newDir === 'right' && bike.dir !== 'left')) {
+                    bike.nextDir = newDir;
+                }
+            }
+            if (e.code === 'Space') {
+                if (!gameRunning) start();
+                else pause();
+            }
+        });
+
+        // Mobile controls
+        document.querySelectorAll('.mobile-btn').forEach(btn => {
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const dir = btn.dataset.dir;
+                if ((dir === 'up' && bike.dir !== 'down') ||
+                    (dir === 'down' && bike.dir !== 'up') ||
+                    (dir === 'left' && bike.dir !== 'right') ||
+                    (dir === 'right' && bike.dir !== 'left')) {
+                    bike.nextDir = dir;
+                }
+            });
+            btn.addEventListener('click', (e) => {
+                const dir = btn.dataset.dir;
+                if ((dir === 'up' && bike.dir !== 'down') ||
+                    (dir === 'down' && bike.dir !== 'up') ||
+                    (dir === 'left' && bike.dir !== 'right') ||
+                    (dir === 'right' && bike.dir !== 'left')) {
+                    bike.nextDir = dir;
+                }
+            });
+        });
+
+        if ('ontouchstart' in window) {
+            document.querySelector('.mobile-controls').style.display = 'block';
+        }
+
+        startBtn.addEventListener('click', start);
+        pauseBtn.addEventListener('click', pause);
+        resetBtn.addEventListener('click', reset);
+        restartBtn.addEventListener('click', start);
+
+        init();
+        draw();
+    </script>
+</body>
+</html>
